@@ -198,7 +198,7 @@ int main(int argc, char *argv[]) {
       }
 
       size_t difficulty = frame_counter / 360;
-      size_t frequency = std::max(1ul, 30 - difficulty - stage);
+      size_t frequency = std::max(size_t(1), 30 - difficulty - stage);
       if (frame_counter % frequency == 0) {
         for (int i = 0; i < 1; ++i) {
           enemies[dead_enemy].alive = true;
