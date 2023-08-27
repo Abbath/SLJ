@@ -64,7 +64,9 @@ struct Rocket {
   bool alive = false;
 };
 
-void DrawPlayer(Player p) { DrawPoly(Vector2{p.x, p.y}, 3, 32, 180, YELLOW); }
+void DrawPlayer(Player p, bool blink = false) {
+  DrawPoly(Vector2{p.x, p.y}, 3, 32, 180, blink ? BLUE : YELLOW);
+}
 void MovePlayer(Player &p) {
   auto w = GetScreenWidth();
   auto h = GetScreenHeight();
@@ -93,8 +95,10 @@ void MoveBullet(Bullet &b) {
 }
 void DrawEnemy(Enemy e) {
   auto hp = std::min(300, std::max(16, e.hp));
-  DrawRectangle(e.x - hp - (e.is_boss ? e.speed : 0), e.y - hp - (e.is_boss ? 0 : e.speed), hp * 2, hp * 2,
-                Color{255, 0, 0, 128});
+  auto color = ColorAlpha(MAROON, 128);
+  DrawRectangle(e.x - hp - (e.is_boss ? e.speed : 0),
+                e.y - hp - (e.is_boss ? 0 : e.speed * 2), hp * 2, hp * 2,
+                color);
   DrawRectangle(e.x - hp, e.y - hp, hp * 2, hp * 2, e.is_boss ? MAROON : RED);
 }
 void MoveEnemy(Enemy &e) {
@@ -165,11 +169,15 @@ int main(int argc, char *argv[]) {
   bool game_over = false;
   bool pause = true;
   bool boss_is_here = false;
+  bool mute = true;
+  int blink_player = 0;
   int score = 0;
   int stage = 1;
 
+  InitAudioDevice();
+  Sound psound = LoadSound("p.ogg");
+
   while (!WindowShouldClose()) {
-    BeginDrawing();
     if (!game_over && !pause) {
       if (frame_counter % 6 == 0) {
         for (int i = 0; i < p.cannons; ++i) {
@@ -285,13 +293,10 @@ int main(int argc, char *argv[]) {
       if (rocket.alive) {
         rocket.x += rocket.dx;
         rocket.y += rocket.dy;
-        if (rocket.x < 0 || rocket.y < 0 || rocket.x > GetScreenWidth() ||
-            rocket.y > GetScreenHeight()) {
-          rocket.alive = false;
-        }
       }
     }
 
+    BeginDrawing();
     ClearBackground(BLACK);
     for (auto &background : backgrounds) {
       if (background.alive) {
@@ -313,7 +318,8 @@ int main(int argc, char *argv[]) {
         DrawBonus(bonus);
       }
     }
-    DrawPlayer(p);
+    DrawPlayer(p, bool(blink_player));
+    blink_player = std::max(0, blink_player - 1);
     if (rocket.alive) {
       DrawCircle(rocket.x - rocket.dx * (3.0 + 0.5 * GetRandomValue(1, 5)),
                  rocket.y - rocket.dy * (3.0 + 0.5 * GetRandomValue(1, 5)),
@@ -337,7 +343,10 @@ int main(int argc, char *argv[]) {
                          p.bullet_penetration, p.cannons)
                  .c_str(),
              10, 10, 20, RAYWHITE);
-
+    EndDrawing();
+    if (IsKeyPressed(KEY_M)) {
+      mute = !mute;
+    }
     if (!game_over && IsKeyPressed(KEY_SPACE)) {
       pause = !pause;
       if (pause) {
@@ -427,6 +436,7 @@ int main(int argc, char *argv[]) {
               break;
             }
             bonus.alive = false;
+            blink_player = 10;
           }
         }
       }
@@ -438,13 +448,17 @@ int main(int argc, char *argv[]) {
               auto rect =
                   Rectangle{enemy.x - hp, enemy.y - hp, hp * 2.0f, hp * 2.0f};
               if (CheckCollisionPointRec(Vector2{bullet.x, bullet.y}, rect)) {
-                enemy.hp -= p.bullet_damage;
+                enemy.hp -= (p.bullet_damage -
+                             (p.bullet_penetration - bullet.penetration));
                 bullet.penetration -= 1;
                 if (bullet.penetration == 0) {
                   bullet.alive = false;
                 }
                 if (enemy.hp <= 0) {
                   enemy.alive = false;
+                  if (!mute && IsSoundReady(psound)) {
+                    PlaySound(psound);
+                  }
                   if (enemy.is_boss) {
                     score += 500;
                   }
@@ -463,7 +477,6 @@ int main(int argc, char *argv[]) {
       stage += 1;
       boss_is_here = false;
     }
-    EndDrawing();
   }
 
   return 0;
